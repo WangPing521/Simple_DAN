@@ -1,7 +1,7 @@
 from typing import Union
-
+import os
 import torch
-from deepclustering2 import ModelMode, PROJECT_PATH
+from deepclustering2 import ModelMode
 from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter
 from deepclustering2.loss import SimplexCrossEntropyLoss, Entropy
 from deepclustering2.models import ZeroGradientBackwardStep
@@ -16,6 +16,8 @@ from meters.averagemeter import AverageValueMeter
 
 
 class DANTrainer(_Trainer):
+    this_directory = os.path.abspath(os.path.dirname(__file__))
+    PROJECT_PATH = os.path.dirname(this_directory)
     RUN_PATH = str(Path(PROJECT_PATH, "runs"))
 
     def __init__(
@@ -75,7 +77,10 @@ class DANTrainer(_Trainer):
             "adv_loss", AverageValueMeter(), group_name="train"
         )
         self._meter_interface.register_new_meter(
-            "total_loss", AverageValueMeter(), group_name="train"
+            "SN_loss", AverageValueMeter(), group_name="train"
+        )
+        self._meter_interface.register_new_meter(
+            "EN_loss", AverageValueMeter(), group_name="train"
         )
 
         self._meter_interface.register_new_meter(
@@ -93,15 +98,20 @@ class DANTrainer(_Trainer):
         batch_indicator = tqdm_(range(self._num_batches))
         batch_indicator.set_description(f"Training Epoch {epoch:03d}")
         for batch_id, lab_data, unlab_data in zip(batch_indicator, lab_loader, unlab_loader):
-            loss, adloss = self._run_step(lab_data=lab_data, unlab_data=unlab_data)
+            loss, lab_loss, ENunlab_loss, SNunlab_loss = self._run_step(lab_data=lab_data, unlab_data=unlab_data)
             with ZeroGradientBackwardStep(
-                    loss - self._weight_scheduler.value * adloss,
-                    self._model
+                    loss + self._weight_scheduler.value * SNunlab_loss,
+                    self._model[0]
             ) as new_loss:
-                new_loss.backward()
-            self._meter_interface['total_loss'].add(new_loss.item())
+                new_loss.backward(retain_graph=True)
+            with ZeroGradientBackwardStep(
+                    self._weight_scheduler.value * (lab_loss + ENunlab_loss),
+                    self._model[1]
+            ) as new_loss1:
+                new_loss1.backward()
+            self._meter_interface['SN_loss'].add(new_loss.item())
             self._meter_interface['sup_loss'].add(loss.item())
-            self._meter_interface['adv_loss'].add(adloss.item())
+            self._meter_interface['EN_loss'].add(new_loss1.item())
             if ((batch_id + 1) % 5) == 0:
                 report_statue = self._meter_interface.tracking_status("train")
                 batch_indicator.set_postfix(flatten_dict(report_statue))
@@ -165,7 +175,7 @@ class DANTrainer(_Trainer):
                 epoch=epoch
             )
             with torch.no_grad():
-                current_score = self.val_loop(self._val_loader, epoch)
+                current_score = self.eval_loop(self._val_loader, epoch)
             self.schedulerStep()
             self.save_checkpoint(self.state_dict(), epoch, current_score)
             self._meter_interface.summary().to_csv(self._save_dir / "wholeMeter.csv")
@@ -195,8 +205,8 @@ class DANTrainer(_Trainer):
         unlab_decision = self._model[1](merge_input(pred=unlab_preds, img=uimage)).softmax(1)
         lab_loss = (lab_decision[:, 0] + 1e-16).log()
         lab_loss = (-1.0 * lab_loss.sum()) / (lab_decision[:, 0].shape[0])
-        unlab_loss = (unlab_decision[:, 1] + 1e-16).log()
-        unlab_loss = (-1.0 * unlab_loss.sum()) / (unlab_decision[:, 1].shape[0])
-
-        adloss = lab_loss + unlab_loss
-        return loss, adloss
+        ENunlab_loss = (unlab_decision[:, 1] + 1e-16).log()
+        SNunlab_loss = (unlab_decision[:, 0] + 1e-16).log()
+        ENunlab_loss = (-1.0 * ENunlab_loss.sum()) / (unlab_decision[:, 1].shape[0])
+        SNunlab_loss = (-1.0 * SNunlab_loss.sum()) / (unlab_decision[:, 0].shape[0])
+        return loss, lab_loss, ENunlab_loss, SNunlab_loss

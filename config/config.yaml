@@ -32,8 +32,8 @@ Data:
   seed: 1
 
 DataLoader:
-  labeled_batch_size: 2
-  unlabeled_batch_size: 4
+  labeled_batch_size: 4
+  unlabeled_batch_size: 6
   val_batch_size: 1
   shuffle: True
   num_workers: 0

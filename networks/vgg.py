@@ -9,11 +9,13 @@ class VGG16(nn.Module):
         self.num_classes = num_classes
         self.classifier = nn.Sequential(
             nn.Linear(512 * 6 * 6, 4096),
+            nn.BatchNorm2d(4096, 1e-3),
             nn.ReLU(inplace=True),
-            nn.Dropout(),
+            # nn.Dropout(),
             nn.Linear(4096, 4096),
+            nn.BatchNorm2d(4096, 1e-3),
             nn.ReLU(inplace=True),
-            nn.Dropout(),
+            # nn.Dropout(),
             nn.Linear(4096, num_classes),
         )
         self.conv1 = nn.Conv2d(5, 64, kernel_size=3, padding=1)
