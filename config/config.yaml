@@ -20,9 +20,9 @@ Scheduler:
     total_epoch: 10
 
 RegScheduler:
-  begin_epoch: 5
-  max_epoch: 50
-  max_value: 0.001
+  begin_epoch: 10
+  max_epoch: 80
+  max_value: 0.1
 
 Dataset: acdc
 

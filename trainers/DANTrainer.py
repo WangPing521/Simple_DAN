@@ -74,9 +74,6 @@ class DANTrainer(_Trainer):
             "sup_loss", AverageValueMeter(), group_name="train"
         )
         self._meter_interface.register_new_meter(
-            "adv_loss", AverageValueMeter(), group_name="train"
-        )
-        self._meter_interface.register_new_meter(
             "SN_loss", AverageValueMeter(), group_name="train"
         )
         self._meter_interface.register_new_meter(
@@ -100,18 +97,18 @@ class DANTrainer(_Trainer):
         for batch_id, lab_data, unlab_data in zip(batch_indicator, lab_loader, unlab_loader):
             loss, lab_loss, ENunlab_loss, SNunlab_loss = self._run_step(lab_data=lab_data, unlab_data=unlab_data)
             with ZeroGradientBackwardStep(
-                    loss + self._weight_scheduler.value * SNunlab_loss,
-                    self._model[0]
-            ) as new_loss:
-                new_loss.backward(retain_graph=True)
-            with ZeroGradientBackwardStep(
                     self._weight_scheduler.value * (lab_loss + ENunlab_loss),
                     self._model[1]
-            ) as new_loss1:
-                new_loss1.backward()
-            self._meter_interface['SN_loss'].add(new_loss.item())
+            ) as EN_loss:
+                EN_loss.backward(retain_graph=True)
+            with ZeroGradientBackwardStep(
+                    loss + self._weight_scheduler.value * SNunlab_loss,
+                    self._model[0]
+            ) as SN_loss:
+                SN_loss.backward(retain_graph=True)
+            self._meter_interface['EN_loss'].add(EN_loss.item())
             self._meter_interface['sup_loss'].add(loss.item())
-            self._meter_interface['EN_loss'].add(new_loss1.item())
+            self._meter_interface['SN_loss'].add(SN_loss.item())
             if ((batch_id + 1) % 5) == 0:
                 report_statue = self._meter_interface.tracking_status("train")
                 batch_indicator.set_postfix(flatten_dict(report_statue))
@@ -203,10 +200,13 @@ class DANTrainer(_Trainer):
 
         lab_decision = self._model[1](merge_input(pred=lab_preds, img=image)).softmax(1)
         unlab_decision = self._model[1](merge_input(pred=unlab_preds, img=uimage)).softmax(1)
+
         lab_loss = (lab_decision[:, 0] + 1e-16).log()
         lab_loss = (-1.0 * lab_loss.sum()) / (lab_decision[:, 0].shape[0])
+
         ENunlab_loss = (unlab_decision[:, 1] + 1e-16).log()
-        SNunlab_loss = (unlab_decision[:, 0] + 1e-16).log()
         ENunlab_loss = (-1.0 * ENunlab_loss.sum()) / (unlab_decision[:, 1].shape[0])
+
+        SNunlab_loss = (unlab_decision[:, 0] + 1e-16).log()
         SNunlab_loss = (-1.0 * SNunlab_loss.sum()) / (unlab_decision[:, 0].shape[0])
         return loss, lab_loss, ENunlab_loss, SNunlab_loss

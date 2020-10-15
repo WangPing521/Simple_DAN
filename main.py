@@ -1,4 +1,5 @@
 import sys
+
 sys.path.insert(0, "../")
 
 from deepclustering2.configparser import ConfigManger
@@ -64,6 +65,6 @@ trainer = DANTrainer(
     weight_scheduler=RegScheduler,
     val_loader=val_loader,
     config=config,
-    **config["Trainer"],
+    **config["Trainer"]
 )
 trainer.start_training()
