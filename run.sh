@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-save_dir=1006
+save_dir=1006_unet
 
 declare -a StringArray=(
   "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/baseline RegScheduler.max_value=0.0"

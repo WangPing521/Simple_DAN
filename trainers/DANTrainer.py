@@ -1,18 +1,18 @@
 import os
+from typing import Union
 
+import numpy as np
 import torch
 from deepclustering.trainer import _Trainer
 from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter
 from deepclustering2.loss import KL_div, Entropy
 from deepclustering2.schedulers import Weight_RampScheduler
 from deepclustering2.utils import tqdm_, flatten_dict, nice_dict, class2one_hot, Path
-from torch import nn, optim
-from torch.utils.data import DataLoader
-from typing import Union
-
 from lossfunc.helper import average_list, merge_input
 from meters import UniversalDice
 from meters.averagemeter import AverageValueMeter
+from torch import nn, optim
+from torch.utils.data import DataLoader
 
 
 class DANTrainer(_Trainer):
@@ -61,8 +61,8 @@ class DANTrainer(_Trainer):
         self._entropy_criterion = Entropy()
         self._disc = discriminator
 
-        self._model_optimizer = optim.Adam(model.parameters(), lr=1e-3)
-        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-3)
+        self._model_optimizer = optim.Adam(model.parameters(), lr=1e-5)
+        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-5)
         self._bce_criterion = nn.BCELoss()
 
     def register_meters(self, enable_drawer=True) -> None:
@@ -107,11 +107,13 @@ class DANTrainer(_Trainer):
             self._run_step(lab_data=lab_data, unlab_data=unlab_data)
             if ((batch_id + 1) % 5) == 0:
                 report_statue = self._meter_interface.tracking_status("train")
-                batch_indicator.set_postfix(flatten_dict(report_statue))
+                report_statue = {k: v for k, v in flatten_dict(report_statue).items() if not np.isnan(v)}
+                batch_indicator.set_postfix(report_statue)
         report_statue = self._meter_interface.tracking_status("train")
-        batch_indicator.set_postfix(flatten_dict(report_statue))
+        report_statue = {k: v for k, v in flatten_dict(report_statue).items() if not np.isnan(v)}
+        batch_indicator.set_postfix(report_statue)
         self.writer.add_scalar_with_tag(
-            "train", flatten_dict(report_statue), global_step=epoch
+            "train", report_statue, global_step=epoch
         )
         print(f"Training Epoch {epoch}: {nice_dict(flatten_dict(report_statue))}")
 

@@ -11,12 +11,12 @@ from lossfunc.augment import val_transform, train_transform
 from lossfunc.augment_spleen import val_transformS, train_transformS
 from trainers.DANTrainer import DANTrainer
 from networks.disc import OfficialDiscriminator
-from networks.enet import Enet
+from networks.unet import UNet
 
 config = ConfigManger("config/config.yaml").config
 fix_all_seed(config['seed'])
 
-model = Enet(input_dim=1, num_classes=4)
+model = UNet(input_dim=1, num_classes=4)
 discriminator = OfficialDiscriminator(nc=5, ndf=64)
 
 if config['Dataset'] == 'acdc':
@@ -58,8 +58,8 @@ RegScheduler = Weight_RampScheduler(**config["RegScheduler"])
 trainer = DANTrainer(
     model=model,
     discriminator=discriminator,
-    lab_loader=label_loader,
-    unlab_loader=unlab_loader,
+    lab_loader=iter(label_loader),
+    unlab_loader=iter(unlab_loader),
     weight_scheduler=RegScheduler,
     val_loader=val_loader,
     config=config,
