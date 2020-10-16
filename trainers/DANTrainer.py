@@ -6,13 +6,14 @@ import torch
 from deepclustering.trainer import _Trainer
 from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter
 from deepclustering2.loss import KL_div, Entropy
-from deepclustering2.schedulers import Weight_RampScheduler
+from deepclustering2.schedulers import Weight_RampScheduler, GradualWarmupScheduler
 from deepclustering2.utils import tqdm_, flatten_dict, nice_dict, class2one_hot, Path
+from torch import nn, optim
+from torch.utils.data import DataLoader
+
 from lossfunc.helper import average_list, merge_input
 from meters import UniversalDice
 from meters.averagemeter import AverageValueMeter
-from torch import nn, optim
-from torch.utils.data import DataLoader
 
 
 class DANTrainer(_Trainer):
@@ -61,9 +62,15 @@ class DANTrainer(_Trainer):
         self._entropy_criterion = Entropy()
         self._disc = discriminator
 
-        self._model_optimizer = optim.Adam(model.parameters(), lr=1e-5)
-        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-5)
+        self._model_optimizer = optim.Adam(model.parameters(), lr=5e-4/100)
+        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-4)
         self._bce_criterion = nn.BCELoss()
+
+        scheduler = torch.optim.lr_scheduler.StepLR(self._model_optimizer, step_size=50, gamma=0.1)
+        scheduler = GradualWarmupScheduler(self._model_optimizer, 100,
+                                           total_epoch=10,
+                                           after_scheduler=scheduler)
+        self._scheduler = scheduler
 
     def register_meters(self, enable_drawer=True) -> None:
         super(DANTrainer, self).register_meters()
@@ -152,6 +159,7 @@ class DANTrainer(_Trainer):
 
     def schedulerStep(self):
         self._weight_scheduler.step()
+        self._scheduler.step();
 
     def _start_training(self):
         from deepclustering2.optim import get_lrs_from_optimizer
