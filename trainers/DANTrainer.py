@@ -194,6 +194,8 @@ class DANTrainer(_Trainer):
 
         # supervised learning
         loss = self._ce_criterion(lab_preds, onehot_target)
+        if torch.isnan(loss):
+            raise RuntimeError("nan")
         self._model_optimizer.zero_grad()
         loss.backward()
         self._model_optimizer.step()
@@ -219,6 +221,8 @@ class DANTrainer(_Trainer):
 
             labeled_loss = self._bce_criterion(lab_decision, labeled_targt_)
             unlabeled_loss = self._bce_criterion(unlab_decision, unlabeled_target_)
+            if torch.isnan(labeled_loss) or torch.isnan(unlabeled_loss):
+                raise RuntimeError("loss nan")
 
             disc_loss = labeled_loss + unlabeled_loss
             (disc_loss * adv_weight).backward()
@@ -232,6 +236,8 @@ class DANTrainer(_Trainer):
             self._meter_interface["D(U)2"].add(unlab_decision.mean().item())
             labeled_targt_ = torch.zeros(b_unlabeled, device=self._device).fill_(self.labeled_tag)
             gen_loss = self._bce_criterion(unlab_decision, labeled_targt_)
+            if torch.isnan(gen_loss):
+                raise RuntimeError("nana")
             (gen_loss * adv_weight).backward()
             self._model_optimizer.step()
 
