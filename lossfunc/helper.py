@@ -3,11 +3,10 @@ from typing import Union
 
 import numpy as np
 import torch
-from torch import Tensor, Size
-from torch.utils.data.dataloader import _BaseDataLoaderIter, DataLoader
-
 from deepclustering.dataloader.sampler import InfiniteRandomSampler
 from deepclustering.utils import simplex
+from torch import Tensor, Size
+from torch.utils.data.dataloader import _BaseDataLoaderIter, DataLoader
 
 
 def average_list(input_list):

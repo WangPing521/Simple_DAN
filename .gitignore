@@ -1,0 +1,6 @@
+venv
+.idea
+/ref
+*/*.pyc
+*/__pycache__/*
+runs
