@@ -3,9 +3,10 @@ from typing import Union
 
 import numpy as np
 import torch
-from deepclustering.trainer import _Trainer
-from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter
+from deepclustering.trainer import _Trainer  # noqa
+from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter  # noqa
 from deepclustering2.loss import KL_div, Entropy
+from deepclustering2.optim import get_lrs_from_optimizer
 from deepclustering2.schedulers import Weight_RampScheduler, GradualWarmupScheduler
 from deepclustering2.utils import tqdm_, flatten_dict, nice_dict, class2one_hot, Path
 from torch import nn, optim
@@ -62,15 +63,16 @@ class DANTrainer(_Trainer):
         self._entropy_criterion = Entropy()
         self._disc = discriminator
 
-        self._model_optimizer = optim.Adam(model.parameters(), lr=5e-4/100)
+        self._model_optimizer = optim.Adam(model.parameters(), lr=5e-4 / 100)
         self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-4)
         self._bce_criterion = nn.BCELoss()
 
-        scheduler = torch.optim.lr_scheduler.StepLR(self._model_optimizer, step_size=50, gamma=0.1)
-        scheduler = GradualWarmupScheduler(self._model_optimizer, 100,
-                                           total_epoch=10,
-                                           after_scheduler=scheduler)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self._model_optimizer,
+                                                               T_max=max(self._max_epoch - 10, 1), eta_min=1e-7)
+        scheduler = GradualWarmupScheduler(self._model_optimizer, multiplier=100, total_epoch=10, after_scheduler=scheduler)
         self._scheduler = scheduler
+        import matplotlib.pyplot as plt
+
 
     def register_meters(self, enable_drawer=True) -> None:
         super(DANTrainer, self).register_meters()
@@ -112,10 +114,10 @@ class DANTrainer(_Trainer):
         batch_indicator.set_description(f"Training Epoch {epoch:03d}")
         for batch_id, lab_data, unlab_data in zip(batch_indicator, lab_loader, unlab_loader):
             self._run_step(lab_data=lab_data, unlab_data=unlab_data)
-            if ((batch_id + 1) % 5) == 0:
-                report_statue = self._meter_interface.tracking_status("train")
-                report_statue = {k: v for k, v in flatten_dict(report_statue).items() if not np.isnan(v)}
-                batch_indicator.set_postfix(report_statue)
+
+            report_statue = self._meter_interface.tracking_status("train")
+            report_statue = {k: v for k, v in flatten_dict(report_statue).items() if not np.isnan(v)}
+            batch_indicator.set_postfix(report_statue)
         report_statue = self._meter_interface.tracking_status("train")
         report_statue = {k: v for k, v in flatten_dict(report_statue).items() if not np.isnan(v)}
         batch_indicator.set_postfix(report_statue)
@@ -159,10 +161,9 @@ class DANTrainer(_Trainer):
 
     def schedulerStep(self):
         self._weight_scheduler.step()
-        self._scheduler.step();
+        self._scheduler.step()
 
     def _start_training(self):
-        from deepclustering2.optim import get_lrs_from_optimizer
         self.to(self._device)
         for epoch in range(self._start_epoch, self._max_epoch):
             self._meter_interface['lr'].add(get_lrs_from_optimizer(self._model_optimizer)[0])
@@ -176,6 +177,7 @@ class DANTrainer(_Trainer):
             with torch.no_grad():
                 current_score = self.eval_loop(self._val_loader, epoch)
             self.schedulerStep()
+            self._meter_interface.step()
             self.save_checkpoint(self.state_dict(), epoch, current_score)
             self._meter_interface.summary().to_csv(self._save_dir / "wholeMeter.csv")
 
@@ -214,6 +216,7 @@ class DANTrainer(_Trainer):
             group_name=["_".join(x.split("_")[:-2]) for x in filename]
         )
         gen_loss = torch.tensor(0.0, dtype=torch.float, device=self._device)
+
         if adv_weight > 0:
             # train generator
             unlab_decision = self._disc(merge_input(pred=unlab_preds, img=uimage)).squeeze()

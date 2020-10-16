@@ -27,6 +27,8 @@ elif config['Dataset'] == 'spleen':
     val_transform = val_transformS
 elif config['Dataset'] == 'prostate':
     dataset_handler = ProstateSemiInterface(**config["Data"])
+else:
+    raise NotImplementedError(config["Dataset"])
 
 
 def get_group_set(dataloader):
@@ -65,4 +67,8 @@ trainer = DANTrainer(
     config=config,
     **config["Trainer"]
 )
+
+checkpoint = config.get("Checkpoint", None)
+# if checkpoint:
+#     trainer.load_checkpoint_from_path(checkpoint)
 trainer.start_training()

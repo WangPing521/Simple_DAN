@@ -3,6 +3,7 @@ save_dir=1006_unet
 
 declare -a StringArray=(
   "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/baseline RegScheduler.max_value=0.0"
+  "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/fs RegScheduler.max_value=0.0 Data.labeled_data_ratio==1 Data.unlabeled_data_ratio=0.0 "
   "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.001 RegScheduler.max_value=0.001"
   "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.01 RegScheduler.max_value=0.01"
   "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.1 RegScheduler.max_value=0.1"
