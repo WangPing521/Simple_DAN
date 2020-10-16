@@ -3,7 +3,7 @@ import os
 import torch
 from deepclustering.trainer import _Trainer
 from deepclustering2.dataloader.dataloader import _BaseDataLoaderIter
-from deepclustering2.loss import SimplexCrossEntropyLoss, Entropy
+from deepclustering2.loss import KL_div, Entropy
 from deepclustering2.schedulers import Weight_RampScheduler
 from deepclustering2.utils import tqdm_, flatten_dict, nice_dict, class2one_hot, Path
 from torch import nn, optim
@@ -55,7 +55,7 @@ class DANTrainer(_Trainer):
             **kwargs,
         )
         self._num_batches = num_batches
-        self._ce_criterion = SimplexCrossEntropyLoss()
+        self._ce_criterion = KL_div(verbose=False)
         self._weight_scheduler = weight_scheduler
         self.checkpoint_path = checkpoint_path
         self._entropy_criterion = Entropy()

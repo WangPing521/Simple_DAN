@@ -5,7 +5,7 @@ sys.path.insert(0, "../")
 from deepclustering2.configparser import ConfigManger
 from deepclustering2.dataset import ACDCSemiInterface
 from deepclustering2.dataset.segmentation import ProstateSemiInterface, SpleenSemiInterface
-from deepclustering2.utils import set_benchmark
+from deepclustering2.utils import fix_all_seed
 from deepclustering.schedulers import Weight_RampScheduler
 from lossfunc.augment import val_transform, train_transform
 from lossfunc.augment_spleen import val_transformS, train_transformS
@@ -14,7 +14,7 @@ from networks.disc import OfficialDiscriminator
 from networks.enet import Enet
 
 config = ConfigManger("config/config.yaml").config
-set_benchmark(config['seed'])
+fix_all_seed(config['seed'])
 
 model = Enet(input_dim=1, num_classes=4)
 discriminator = OfficialDiscriminator(nc=5, ndf=64)
