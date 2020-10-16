@@ -4,7 +4,7 @@ Arch1:
   num_classes: 4
 
 RegScheduler:
-  begin_epoch: 5
+  begin_epoch: 10
   max_epoch: 20
   max_value: 0.1
 
@@ -20,7 +20,7 @@ DataLoader:
   unlabeled_batch_size: 6
   val_batch_size: 1
   shuffle: True
-  num_workers: 0
+  num_workers: 4
 
 Trainer:
   device: cuda

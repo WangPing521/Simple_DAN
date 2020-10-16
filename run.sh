@@ -1,36 +1,11 @@
 #!/usr/bin/env bash
-
-set  -e -u -o pipefail
-
-CC_WRAPPER_PATH="CC_wrapper.sh"
-
-source $CC_WRAPPER_PATH
-
-time=5
-account=def-chdesa
-save_dir=DAN_results_new
-
-num_batches=200
-ratio1=0.1
-unlab_ratio1=$(python -c "print(1-${ratio1})")
-
+save_dir=1006
 
 declare -a StringArray=(
-"python -O main.py Optim.lr=0.0001 RegScheduler.max_value=0.5 Trainer.save_dir=${save_dir}/0.0001_0.5 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-"python -O main.py Optim.lr=0.0001 RegScheduler.max_value=1 Trainer.save_dir=${save_dir}/0.0001_1 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-
-"python -O main.py Optim.lr=0.00001 RegScheduler.max_value=0.5 Trainer.save_dir=${save_dir}/0.00001_0.5 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-"python -O main.py Optim.lr=0.00001 RegScheduler.max_value=1 Trainer.save_dir=${save_dir}/0.00001_1 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-
-"python -O main.py Optim.lr=0.000001 RegScheduler.max_value=0.5 Trainer.save_dir=${save_dir}/0.000001_0.5 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-"python -O main.py Optim.lr=0.000001 RegScheduler.max_value=1 Trainer.save_dir=${save_dir}/0.000001_1 Trainer.num_batches=${num_batches} Data.unlabeled_data_ratio=${unlab_ratio1} Data.labeled_data_ratio=${ratio1}"
-
+  "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/baseline RegScheduler.max_value=0.0"
+  "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.001 RegScheduler.max_value=0.001"
+  "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.01 RegScheduler.max_value=0.01"
+  "OMP_NUM_THREADS=1 python -O main.py Trainer.num_batches=500 Trainer.save_dir=${save_dir}/adv_0.1 RegScheduler.max_value=0.1"
 )
 
-for cmd in "${StringArray[@]}"
-do
-	echo ${cmd}
-	CC_wrapper "${time}" "${account}" "${cmd}" 16
-
-done
-
+gpuqueue "${StringArray[@]}" --available_gpus 0 1

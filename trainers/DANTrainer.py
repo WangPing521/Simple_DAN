@@ -1,5 +1,4 @@
 import os
-from typing import Union
 
 import torch
 from deepclustering.trainer import _Trainer
@@ -9,6 +8,7 @@ from deepclustering2.schedulers import Weight_RampScheduler
 from deepclustering2.utils import tqdm_, flatten_dict, nice_dict, class2one_hot, Path
 from torch import nn, optim
 from torch.utils.data import DataLoader
+from typing import Union
 
 from lossfunc.helper import average_list, merge_input
 from meters import UniversalDice
@@ -61,17 +61,14 @@ class DANTrainer(_Trainer):
         self._entropy_criterion = Entropy()
         self._disc = discriminator
 
-        self._model_optimizer = optim.Adam(model.parameters(), lr=1e-4)
-        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-4)
-
+        self._model_optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        self._disc_optimizer = optim.Adam(discriminator.parameters(), lr=1e-3)
         self._bce_criterion = nn.BCELoss()
 
     def register_meters(self, enable_drawer=True) -> None:
         super(DANTrainer, self).register_meters()
         c = self._config['Arch1'].get('num_classes')
-        report_axises = []
-        for axi in range(c):
-            report_axises.append(axi)
+        report_axises = list(range(1, c))
 
         self._meter_interface.register_new_meter(
             f"tra_dice", UniversalDice(C=c, report_axises=report_axises), group_name="train"
@@ -185,6 +182,8 @@ class DANTrainer(_Trainer):
             target.squeeze(1), self._model.num_classes
         )
         uimage = unlab_data[0][0].to(self._device)
+
+        # train segmentor
         lab_preds = self._model(image).softmax(1)
         unlab_preds = self._model(uimage).softmax(1)
 
@@ -193,23 +192,38 @@ class DANTrainer(_Trainer):
         b_unlabeled = uimage.shape[0]
 
         # supervised learning
-        loss = self._ce_criterion(lab_preds, onehot_target)
-        if torch.isnan(loss):
-            raise RuntimeError("nan")
         self._model_optimizer.zero_grad()
-        loss.backward()
-        self._model_optimizer.step()
-        self._meter_interface["sup_loss"].add(loss.item())
+
+        sup_loss = self._ce_criterion(lab_preds, onehot_target)
+        if torch.isnan(sup_loss):
+            raise RuntimeError("nan")
+        self._meter_interface["sup_loss"].add(sup_loss.item())
         self._meter_interface['tra_dice'].add(
             lab_preds.max(1)[1],
             target.squeeze(1),
             group_name=["_".join(x.split("_")[:-2]) for x in filename]
         )
-
+        gen_loss = torch.tensor(0.0, dtype=torch.float, device=self._device)
         if adv_weight > 0:
-            # adversarial learning
-            # first train discriminator
+            # train generator
+            unlab_decision = self._disc(merge_input(pred=unlab_preds, img=uimage)).squeeze()
+            self._meter_interface["D(U)2"].add(unlab_decision.mean().item())
+            labeled_targt_ = torch.zeros(b_unlabeled, device=self._device).fill_(self.labeled_tag)
+            gen_loss = self._bce_criterion(unlab_decision, labeled_targt_)
+            if torch.isnan(gen_loss):
+                raise RuntimeError("nan")
+
+        segmentor_loss = sup_loss + adv_weight * gen_loss
+        segmentor_loss.backward()
+        self._model_optimizer.step()
+
+        # adversarial learning
+        # train discriminator
+        if adv_weight > 0:
             self._disc_optimizer.zero_grad()
+            with torch.no_grad():
+                lab_preds = self._model(image).softmax(1)
+                unlab_preds = self._model(uimage).softmax(1)
 
             labeled_targt_ = torch.zeros(b_label, device=self._device).fill_(self.labeled_tag)
             unlabeled_target_ = torch.zeros(b_unlabeled, device=self._device).fill_(self.unlabeled_tag)
@@ -227,19 +241,6 @@ class DANTrainer(_Trainer):
             disc_loss = labeled_loss + unlabeled_loss
             (disc_loss * adv_weight).backward()
             self._disc_optimizer.step()
-
-            # second train generator
-            self._model_optimizer.zero_grad()
-            unlab_preds = self._model(uimage).softmax(1)
-
-            unlab_decision = self._disc(merge_input(pred=unlab_preds, img=uimage)).squeeze()
-            self._meter_interface["D(U)2"].add(unlab_decision.mean().item())
-            labeled_targt_ = torch.zeros(b_unlabeled, device=self._device).fill_(self.labeled_tag)
-            gen_loss = self._bce_criterion(unlab_decision, labeled_targt_)
-            if torch.isnan(gen_loss):
-                raise RuntimeError("nana")
-            (gen_loss * adv_weight).backward()
-            self._model_optimizer.step()
 
     def to(self, device):
         self._model.to(device)
